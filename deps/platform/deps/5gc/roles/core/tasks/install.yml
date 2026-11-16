@@ -1,0 +1,126 @@
+---
+
+# The sd-core chart ships with this repo (core/charts/); charts.aetherproject.org is offline.
+- name: copy {{ ROOT_DIR }}/{{ core.helm.chart_ref }} to /tmp/sd-core-chart.tgz
+  copy:
+    src: "{{ ROOT_DIR }}/{{ core.helm.chart_ref }}"
+    dest: /tmp/sd-core-chart.tgz
+  when: inventory_hostname in groups['master_nodes']
+
+- name: find {{ core.data_iface }}'s subnet for RAN
+  shell: ip route | grep {{ core.data_iface }} | awk '/kernel/ {print $1}' | head -1
+  register: result
+  when: inventory_hostname in groups['master_nodes']
+  become: true
+
+- set_fact:
+    ran_subnet: "172.20.0.0/16" # "{{ result.stdout }}"
+  when: inventory_hostname in groups['master_nodes']
+
+- name: remove /tmp/sdcore-5g-values.yaml
+  file:
+    path: "/tmp/sdcore-5g-values.yaml"
+    state: absent
+  when: inventory_hostname in groups['master_nodes']
+
+- name: copy {{ ROOT_DIR }}/{{ core.values_file }} to /tmp/sdcore-5g-values.yaml
+  template:
+    src: "{{ ROOT_DIR }}/{{ core.values_file }}"
+    dest: "/tmp/sdcore-5g-values.yaml"
+  when: inventory_hostname in groups['master_nodes']
+
+- name: copy image set core/values/images/$HELIX_IMAGES.yaml to /tmp/sdcore-5g-images.yaml
+  copy:
+    src: "{{ ROOT_DIR }}/core/values/images/{{ lookup('env', 'HELIX_IMAGES') }}.yaml"
+    dest: "/tmp/sdcore-5g-images.yaml"
+  when: inventory_hostname in groups['master_nodes'] and lookup('env', 'HELIX_IMAGES') != ''
+
+#     helm dep up "{{ core.helm.chart_ref }}"
+
+- name: deploy aether 5gc
+  block:
+    - name: install 5gc helm charts
+      kubernetes.core.helm:
+        name: sd-core
+        release_namespace: omec
+        create_namespace: true
+        chart_ref: /tmp/sd-core-chart.tgz
+        values_files: "{{ ['/tmp/sdcore-5g-values.yaml'] + (['/tmp/sdcore-5g-images.yaml'] if lookup('env', 'HELIX_IMAGES') != '' else []) }}"
+        wait: true
+        wait_timeout: "1m30s"
+        force: true
+      when: inventory_hostname in groups['master_nodes']
+
+  rescue:
+    - name: get pods status
+      shell: kubectl get po -n omec
+      register: pods_status
+      changed_when: false
+      when: inventory_hostname in groups['master_nodes']
+
+    - name: restart pods if not responding
+      shell: |
+        while IFS= read -r line; do
+          name=$(echo "$line" | awk '{print $1}')
+          status=$(echo "$line" | awk '{print $3}')
+          if [[ "$status" != "Running" ]]; then
+            kubectl delete pod "$name" -n omec
+          fi
+        done <<< "{{ pods_status.stdout }}"
+      args:
+        executable: /bin/bash
+      when: inventory_hostname in groups['master_nodes']
+  
+  always:
+    - pause:
+        seconds: 10
+
+- name: copy redis.yml files to aether host 
+  copy:
+    src: "{{ ROOT_DIR }}/redis.yml"
+    dest: /tmp/redis.yml
+    force: yes    
+  when: inventory_hostname in groups['master_nodes']
+
+- name: run redis db
+  shell: kubectl apply -f /tmp/redis.yml -n omec
+  when: inventory_hostname in groups['master_nodes']
+
+- name: run AMF instances
+  shell: kubectl scale --replicas={{ core.pods.amf }} deployment/amf -n omec
+  when: inventory_hostname in groups['master_nodes']
+
+- name: run SMF instances
+  shell: kubectl scale --replicas={{ core.pods.smf }} deployment/smf -n omec
+  when: inventory_hostname in groups['master_nodes']
+
+- name: run UDM instances
+  shell: kubectl scale --replicas={{ core.pods.udm }} deployment/udm -n omec
+  when: inventory_hostname in groups['master_nodes']
+
+- name: run UDR instances
+  shell: kubectl scale --replicas={{ core.pods.udr }} deployment/udr -n omec
+  when: inventory_hostname in groups['master_nodes']
+
+- name: run AUSF instances
+  shell: kubectl scale --replicas={{ core.pods.ausf }} deployment/ausf -n omec
+  when: inventory_hostname in groups['master_nodes'] and core.pods.ausf is defined
+
+- name: run PCF instances
+  shell: kubectl scale --replicas={{ core.pods.pcf }} deployment/pcf -n omec
+  when: inventory_hostname in groups['master_nodes'] and core.pods.pcf is defined
+
+- name: run NSSF instances
+  shell: kubectl scale --replicas={{ core.pods.nssf }} deployment/nssf -n omec
+  when: inventory_hostname in groups['master_nodes'] and core.pods.nssf is defined
+
+  #       while IFS= read -r line; do
+  #         name=$(echo "$line" | awk '{print $1}')
+  #         status=$(echo "$line" | awk '{print $3}')
+  #         if [[ "$status" != "Running" ]]; then
+  #           kubectl delete pod "$name" -n omec
+  #         fi
+  #       done <<< "{{ pods_status.stdout }}"
+          
+- pause:
+    seconds: 60

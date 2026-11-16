@@ -1,0 +1,23 @@
+node-ip: "{{ hostvars[inventory_hostname].ansible_host }}"
+cni:
+- multus
+- canal
+cluster-cidr: 10.42.0.0/16
+service-cidr: 10.43.0.0/16
+kubelet-arg:
+- --allowed-unsafe-sysctls=net.*
+- --kube-reserved=cpu=5,memory=5Gi
+- --system-reserved=cpu=5,memory=5Gi
+- --feature-gates=CPUManager=true
+# --topology-manager-policy=best-effort
+- --cpu-manager-policy=static
+- --container-log-max-files=5
+- --container-log-max-size=500Mi
+pause-image: registry.k8s.io/pause:3.3
+kube-proxy-arg:
+- --metrics-bind-address=0.0.0.0:10249
+- --proxy-mode=ipvs
+kube-apiserver-arg:
+- --service-node-port-range=2000-40000
+node-label:
+- "node-role.aetherproject.org=omec-upf"

@@ -1,0 +1,19 @@
+collector:
+  storage:
+    logs_dir: "{{ helix_logs_dir }}"
+gnbsim:
+  core:
+    amf:
+      ip: "{{ helix_core_ip }}"
+  docker:
+    network:
+      macvlan:
+        name: gnbnet
+  servers:
+    config: experiments/e2e-latency/REG/REG-32ues-100events-10ms-parallel-1gnbsim/gnbsim.yaml
+    logs_dir: /tmp/gnbsim-logs
+    pods:
+      count: 1
+  ues:
+    count_per_pod: 32
+    start_imsi: 208930100007487

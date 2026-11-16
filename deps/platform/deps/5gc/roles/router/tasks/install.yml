@@ -1,0 +1,57 @@
+---
+
+- set_fact:
+    systemd_network_dir: /etc/systemd/network
+    systemd_system_dir: /etc/systemd/system
+
+- name: set net.ipv4.conf.all.arp_filter to 1
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_filter
+    value: '1'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['master_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.arp_ignore to 1
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_ignore
+    value: '1'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['master_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.arp_announce to 2
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_announce
+    value: '2'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['master_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.rp_filter to 2
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.rp_filter
+    value: '2'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['master_nodes']
+  become: true
+
+- name: post-install steps ...
+  shell: |
+    ip link show access >/dev/null 2>&1 || ip link add access link {{ core.data_iface }} type macvlan mode bridge
+    ip link show core >/dev/null 2>&1 || ip link add core link {{ core.data_iface }} type macvlan mode bridge
+    ip link set dev access up
+    ip link set dev core up
+    ip addr replace 192.168.252.1/24 dev access
+    ip addr replace 192.168.250.1/24 dev core
+    ip route replace 172.250.0.0/16 via 192.168.250.3
+    iptables -t nat -C POSTROUTING -s 172.250.0.0/16 -o {{ core.data_iface }} -j MASQUERADE || iptables -t nat -A POSTROUTING -s 172.250.0.0/16 -o {{ core.data_iface }} -j MASQUERADE
+  when: inventory_hostname in groups['master_nodes']
+  become: true
+
+- pause:
+    seconds: 15

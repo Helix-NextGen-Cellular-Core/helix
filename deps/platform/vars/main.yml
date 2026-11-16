@@ -1,0 +1,50 @@
+k8s:
+  rke2:
+    config:
+      params_file: 
+        master: "templates/rke2/master-params.yaml"
+        worker: "templates/rke2/worker-params.yaml"
+      
+core:
+  standalone: "true"
+  data_iface: "{{ helix_data_iface }}"
+  values_file: "core/values/helix.yaml"
+  helm:
+    chart_ref: aether/sd-core
+    chart_version: 0.12.6 
+
+gnbsim:
+  docker:
+    container:
+      image: ghcr.io/helix-nextgen-cellular-core/gnbsim:v1.0.0
+      count: 5
+    network:
+      macvlan:
+        name: gnbnet
+
+  router:
+    data_iface: "{{ helix_data_iface }}"
+    macvlan:
+      iface: gnbaccess
+      prefix: "172.20"
+  
+  core:
+    upf:
+      ip_prefix: "192.168.252.0/24"
+    amf:
+      ip: "{{ helix_core_ip }}"
+
+  servers:
+    config: "config/gnbsim.REG.yaml"
+    pods:
+      count: 1
+    logs_dir: /tmp/gnbsim-logs
+
+  ues:
+    start_imsi: 208930100007487
+    count_per_pod: 1
+
+collector:
+  storage:
+    logs_dir: "{{ helix_logs_dir }}"
+    logs_prefix: default

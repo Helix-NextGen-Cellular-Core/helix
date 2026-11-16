@@ -1,0 +1,5 @@
+---
+
+- name: install tools for system profiling
+  include: roles/5g-sys/tasks/sys-profile/install.yml
+  tags: install_sys

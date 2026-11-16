@@ -1,0 +1,10 @@
+collector:
+  storage:
+    logs_dir: /logs/gnbsim-logs
+    logs_prefix: 'ResetCoreForEachRun'
+
+gnbsim:
+  servers:
+    pods:
+      count: 2
+    logs_dir: /tmp/gnbsim-logs

@@ -1,0 +1,23 @@
+collector:
+  storage:
+    logs_dir: "{{ helix_logs_dir }}"
+gnbsim:
+  core:
+    amf:
+      ip: "{{ helix_core_ip }}"
+  docker:
+    network:
+      macvlan:
+        name: gnbnet
+  realTrace:
+    S1_file: ECM_CONNECTED-L_S1_CONN_REL.csv
+    SR_file: ECM_IDLE-L_SRV_REQ.csv
+    folder_path: realTraces/
+  servers:
+    config: experiments/realtrace/SR/SR-256ues-100events-10ms-parallel-X6gnbsim-RealTrace/gnbsim.yaml
+    logs_dir: /tmp/gnbsim-logs
+    pods:
+      count: 16
+  ues:
+    count_per_pod: 16
+    start_imsi: 208930100007487

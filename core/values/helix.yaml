@@ -1,0 +1,1034 @@
+# SPDX-FileCopyrightText: 2022-present Intel Corporation
+# Copyright 2019-present Open Networking Foundation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Disable 4G Control Plane
+omec-control-plane:
+  enable4G: false
+
+# Disable 5G RAN Simulator
+5g-ran-sim:
+  enable: false
+  
+# Override values for 5g-control-plane Helm Chart
+# https://gerrit.opencord.org/sdcore-helm-charts/5g-control-plane/values.yaml
+5g-control-plane:
+  enable5G: true
+  images:
+    repository: ""  # image tags below are full references
+    tags:
+      amf: ghcr.io/helix-nextgen-cellular-core/amf:v1.0.0
+      smf: ghcr.io/helix-nextgen-cellular-core/smf:v1.0.0
+      udr: ghcr.io/helix-nextgen-cellular-core/udr:v1.0.0
+      udm: ghcr.io/helix-nextgen-cellular-core/udm:v1.0.0
+      pcf: ghcr.io/helix-nextgen-cellular-core/pcf:v1.0.0
+      nrf: ghcr.io/helix-nextgen-cellular-core/nrf:v1.0.0
+      nssf: ghcr.io/helix-nextgen-cellular-core/nssf:v1.0.0
+      ausf: ghcr.io/helix-nextgen-cellular-core/ausf:v1.0.0
+      sctplb: ghcr.io/helix-nextgen-cellular-core/sctplb:v1.0.0
+      init: ghcr.io/helix-nextgen-cellular-core/pod-init:1.0.0
+      webui: ghcr.io/helix-nextgen-cellular-core/5gc-webui:master-1121545
+      metricfunc: ghcr.io/helix-nextgen-cellular-core/metricfunc:main-ea5e53f
+
+    pullPolicy: Always
+
+  resources:
+    enabled: true
+    sctplb:
+      limits:
+        cpu: 10
+        memory: 2Gi
+      requests:
+        cpu: 10
+        memory: 1Gi
+    smf:
+      limits:
+        cpu: 40
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    amf:
+      limits:
+        cpu: 40
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    ausf:
+      limits:
+        cpu: 40
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    pcf:
+      limits:
+        cpu: 40
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    udr:
+      limits:
+        cpu: 40
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    udm:
+      limits:
+        cpu: 40
+        memory: 2Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    nssf:
+      limits:
+        cpu: 40
+        memory: 2Gi        
+      requests:
+        cpu: 1
+        memory: 1Gi
+    webui:
+      limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+
+    metricfunc:
+      limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+
+  kafka:
+    deploy: false
+
+  mongodb:
+    image:
+      registry: ghcr.io
+      repository: helix-nextgen-cellular-core/mongodb
+    usePassword: false
+    persistence:
+      enabled: false
+    # Uncomment following 2 lines to enable cluster replication
+    architecture: replicaset
+    replicaCount: 1
+    resources:
+      limits:
+         cpu: 10
+         memory: 9Gi
+      requests:
+         cpu: 10
+         memory: 9Gi
+
+  config:
+    logger:
+      AMF:
+        debugLevel: error
+        ReportCaller: false
+      SMF:
+        debugLevel: error
+        ReportCaller: false
+      UDR:
+        debugLevel: error
+        ReportCaller: false
+      UDM:
+        debugLevel: error
+        ReportCaller: false
+      NRF:
+        debugLevel: error
+        ReportCaller: false
+      PCF:
+        debugLevel: error
+        ReportCaller: false
+      AUSF:
+        debugLevel: error
+        ReportCaller: false
+      SCTPLB:
+        debugLevel: error
+        ReportCaller: false
+      NSSF:
+        debugLevel: error
+        ReportCaller: false
+      N3IWF:
+        debugLevel: error
+        ReportCaller: false
+    # library
+      NAS:
+        debugLevel: error
+        ReportCaller: false
+      FSM:
+        debugLevel: error
+        ReportCaller: false
+      NGAP:
+        debugLevel: error
+        ReportCaller: false
+      NamfComm:
+        debugLevel: error
+        ReportCaller: false
+      NamfEventExposure:
+        debugLevel: error
+        ReportCaller: false
+      NsmfPDUSession:
+        debugLevel: error
+        ReportCaller: false
+      NudrDataRepository:
+        debugLevel: error
+        ReportCaller: false
+      OpenApi:
+        debugLevel: error
+        ReportCaller: false
+      Aper:
+        debugLevel: error
+        ReportCaller: false
+      CommonConsumerTest:
+        debugLevel: error
+        ReportCaller: false
+      PFCP:
+        debugLevel: error
+        ReportCaller: false
+      MongoDBLibrary:
+        debugLevel: error
+        ReportCaller: false
+      PathUtil:
+        debugLevel: error
+        ReportCaller: false
+    # webui
+      WEBUI:
+        debugLevel: error
+        ReportCaller: false
+
+    mongodb:
+      name: free5gc
+      url: mongodb://mongodb-arbiter-headless #enable if cluster deployment required
+
+    managedByConfigPod:
+      enabled: true
+      syncUrl: http://sdcore-adapter-v2-1.aether-roc.svc:8080/synchronize
+
+    sctplb:
+      deploy: true # if enabled then deploy sctp pod. 
+                    # Once backend is stable, this option will be enabled by default
+      ngapp:
+        externalIp: {{ hostvars[inventory_hostname]['ansible_%s' | format(core.data_iface)]['ipv4']['address'] }}
+        port: 38412
+
+    upfadapter:
+      deploy: false # If enabled then deploy upf adapter pod. 
+                    # Once backend is stable, this option will be enabled by default
+
+    metricfunc:
+      deploy: true
+
+    # Change AMF config here if rquired Most of the AMF config comes from Slice APIs
+    # but some of the config is directly provided  thorugh helm chart
+    amf:
+      # Use externalIP if you need to access AMF from remote setup 
+      # and you don't want setup NodePort Service Type
+      cfgFiles:
+        amfcfg.conf:
+          configuration:
+            # storing AMF subscribers in the datastore is disabled by default. 
+            # Once internal testing is complete we will enable DBStore by default.
+            enableDBStore: true
+            enableNrfCaching: true
+            enableScaling: true
+            disableDRSM: false
+            minLbSMF: false
+            redisDb: 0
+
+    # SMF config override. Refer helm chart values for more options.
+    smf:
+      cfgFiles:
+        smfcfg.conf:
+          configuration:
+            # Storing AMF subscribers in the datastore is disabled by default. 
+            # Once internal testing is complete we will enable DBStore by default.
+            enableDBStore: true
+            enableNrfCaching: true
+            enableScaling: true
+            bypassUPF: false
+            redisDb: 1
+
+    nrf:
+      cfgFiles:
+        nrfcfg.conf:
+          configuration:
+            mongoDBStreamEnable: false    # enable/disable MongoDB stream in NRF.
+            nfProfileExpiryEnable: true  # if enabled, remove NF profile if no keepalive received
+            nfKeepAliveTime: 60           # default timeout for NF profiles
+            enableNrfCaching: true
+            enableScaling: true
+
+    ausf:
+      cfgFiles:
+        ausfcfg.conf:
+          configuration:
+            # storing AMF subscribers in the datastore is disabled by default. 
+            # Once internal testing is complete we will enable DBStore by default.
+            enableNrfCaching: true
+            enableScaling: true
+
+    udm:
+      cfgFiles:
+        udmcfg.conf:
+          configuration:
+            # storing AMF subscribers in the datastore is disabled by default. 
+            # Once internal testing is complete we will enable DBStore by default.
+            enableNrfCaching: true
+            enableScaling: true
+    
+    pcf:
+      cfgFiles:
+        pcfcfg.conf:
+          configuration:
+            # storing AMF subscribers in the datastore is disabled by default. 
+            # Once internal testing is complete we will enable DBStore by default.
+            enableNrfCaching: true
+            enableScaling: true
+
+# Override values for omec-sub-provision (subscriber) Helm Chart
+# https://gerrit.opencord.org/sdcore-helm-charts/omec-sub-provision/values.yaml
+# ***Note: Most of these values can (and should) be set via ROC API***
+omec-sub-provision:
+  enable: true
+  images:
+    repository: ""  # image tags below are full references
+    tags:
+      init: ghcr.io/helix-nextgen-cellular-core/pod-init:1.0.0
+      simapp: ghcr.io/helix-nextgen-cellular-core/simapp:main-a4f741a
+
+  config:
+    simapp:
+      cfgFiles:
+        simapp.yaml:
+          configuration:
+            provision-network-slice: {{ core.standalone }} # if enabled, Device Groups & Slices configure by simapp
+            sub-provision-endpt:
+              addr: webui.omec.svc.cluster.local  # subscriber configuation endpoint.
+
+            # Configure Subscriber IMSIs and their security details.
+            # You can have any number of subscriber ranges
+            # This block is always necessary to establish range(s) of valid IMSIs
+            subscribers:
+            - ueId-start: "208930100007487"
+              ueId-end: "208930100007500"
+              plmnId: "20893"
+              opc: "981d464c7c52eb6e5036234984ad0bcf"
+              op: ""
+              key: "5122250214c33e723a5dd523fc145fc0"
+              sequenceNumber: "16f3b3f70fc2"
+            - ueId-start: "208930100007501"
+              ueId-end: "208930100008087"
+              plmnId: "20893"
+              opc: "981d464c7c52eb6e5036234984ad0bcf"
+              op: ""
+              key: "5122250214c33e723a5dd523fc145fc0"
+              sequenceNumber: "16f3b3f70fc2"
+
+            # Configure Device Groups (ignored if provision-network-slice is disabled)
+            device-groups:
+            - name:  "5g-gnbsim-user-group1"
+              imsis:
+                - "208930100007487"
+                - "208930100007488"
+                - "208930100007489"
+                - "208930100007490"
+                - "208930100007491"
+                - "208930100007492"
+                - "208930100007493"
+                - "208930100007494"
+                - "208930100007495"
+                - "208930100007496"
+                - "208930100007497"
+                - "208930100007498"
+                - "208930100007499"
+                - "208930100007500"
+                - "208930100007501"
+                - "208930100007502"
+                - "208930100007503"
+                - "208930100007504"
+                - "208930100007505"
+                - "208930100007506"
+                - "208930100007507"
+                - "208930100007508"
+                - "208930100007509"
+                - "208930100007510"
+                - "208930100007511"
+                - "208930100007512"
+                - "208930100007513"
+                - "208930100007514"
+                - "208930100007515"
+                - "208930100007516"
+                - "208930100007517"
+                - "208930100007518"
+                - "208930100007519"
+                - "208930100007520"
+                - "208930100007521"
+                - "208930100007522"
+                - "208930100007523"
+                - "208930100007524"
+                - "208930100007525"
+                - "208930100007526"
+                - "208930100007527"
+                - "208930100007528"
+                - "208930100007529"
+                - "208930100007530"
+                - "208930100007531"
+                - "208930100007532"
+                - "208930100007533"
+                - "208930100007534"
+                - "208930100007535"
+                - "208930100007536"
+                - "208930100007537"
+                - "208930100007538"
+                - "208930100007539"
+                - "208930100007540"
+                - "208930100007541"
+                - "208930100007542"
+                - "208930100007543"
+                - "208930100007544"
+                - "208930100007545"
+                - "208930100007546"
+                - "208930100007547"
+                - "208930100007548"
+                - "208930100007549"
+                - "208930100007550"
+                - "208930100007551"
+                - "208930100007552"
+                - "208930100007553"
+                - "208930100007554"
+                - "208930100007555"
+                - "208930100007556"
+                - "208930100007557"
+                - "208930100007558"
+                - "208930100007559"
+                - "208930100007560"
+                - "208930100007561"
+                - "208930100007562"
+                - "208930100007563"
+                - "208930100007564"
+                - "208930100007565"
+                - "208930100007566"
+                - "208930100007567"
+                - "208930100007568"
+                - "208930100007569"
+                - "208930100007570"
+                - "208930100007571"
+                - "208930100007572"
+                - "208930100007573"
+                - "208930100007574"
+                - "208930100007575"
+                - "208930100007576"
+                - "208930100007577"
+                - "208930100007578"
+                - "208930100007579"
+                - "208930100007580"
+                - "208930100007581"
+                - "208930100007582"
+                - "208930100007583"
+                - "208930100007584"
+                - "208930100007585"
+                - "208930100007586"
+                - "208930100007587"
+                - "208930100007588"
+                - "208930100007589"
+                - "208930100007590"
+                - "208930100007591"
+                - "208930100007592"
+                - "208930100007593"
+                - "208930100007594"
+                - "208930100007595"
+                - "208930100007596"
+                - "208930100007597"
+                - "208930100007598"
+                - "208930100007599"
+                - "208930100007600"
+                - "208930100007601"
+                - "208930100007602"
+                - "208930100007603"
+                - "208930100007604"
+                - "208930100007605"
+                - "208930100007606"
+                - "208930100007607"
+                - "208930100007608"
+                - "208930100007609"
+                - "208930100007610"
+                - "208930100007611"
+                - "208930100007612"
+                - "208930100007613"
+                - "208930100007614"
+                - "208930100007615"
+                - "208930100007616"
+                - "208930100007617"
+                - "208930100007618"
+                - "208930100007619"
+                - "208930100007620"
+                - "208930100007621"
+                - "208930100007622"
+                - "208930100007623"
+                - "208930100007624"
+                - "208930100007625"
+                - "208930100007626"
+                - "208930100007627"
+                - "208930100007628"
+                - "208930100007629"
+                - "208930100007630"
+                - "208930100007631"
+                - "208930100007632"
+                - "208930100007633"
+                - "208930100007634"
+                - "208930100007635"
+                - "208930100007636"
+                - "208930100007637"
+                - "208930100007638"
+                - "208930100007639"
+                - "208930100007640"
+                - "208930100007641"
+                - "208930100007642"
+                - "208930100007643"
+                - "208930100007644"
+                - "208930100007645"
+                - "208930100007646"
+                - "208930100007647"
+                - "208930100007648"
+                - "208930100007649"
+                - "208930100007650"
+                - "208930100007651"
+                - "208930100007652"
+                - "208930100007653"
+                - "208930100007654"
+                - "208930100007655"
+                - "208930100007656"
+                - "208930100007657"
+                - "208930100007658"
+                - "208930100007659"
+                - "208930100007660"
+                - "208930100007661"
+                - "208930100007662"
+                - "208930100007663"
+                - "208930100007664"
+                - "208930100007665"
+                - "208930100007666"
+                - "208930100007667"
+                - "208930100007668"
+                - "208930100007669"
+                - "208930100007670"
+                - "208930100007671"
+                - "208930100007672"
+                - "208930100007673"
+                - "208930100007674"
+                - "208930100007675"
+                - "208930100007676"
+                - "208930100007677"
+                - "208930100007678"
+                - "208930100007679"
+                - "208930100007680"
+                - "208930100007681"
+                - "208930100007682"
+                - "208930100007683"
+                - "208930100007684"
+                - "208930100007685"
+                - "208930100007686"
+                - "208930100007687"
+                - "208930100007688"
+                - "208930100007689"
+                - "208930100007690"
+                - "208930100007691"
+                - "208930100007692"
+                - "208930100007693"
+                - "208930100007694"
+                - "208930100007695"
+                - "208930100007696"
+                - "208930100007697"
+                - "208930100007698"
+                - "208930100007699"
+                - "208930100007700"
+                - "208930100007701"
+                - "208930100007702"
+                - "208930100007703"
+                - "208930100007704"
+                - "208930100007705"
+                - "208930100007706"
+                - "208930100007707"
+                - "208930100007708"
+                - "208930100007709"
+                - "208930100007710"
+                - "208930100007711"
+                - "208930100007712"
+                - "208930100007713"
+                - "208930100007714"
+                - "208930100007715"
+                - "208930100007716"
+                - "208930100007717"
+                - "208930100007718"
+                - "208930100007719"
+                - "208930100007720"
+                - "208930100007721"
+                - "208930100007722"
+                - "208930100007723"
+                - "208930100007724"
+                - "208930100007725"
+                - "208930100007726"
+                - "208930100007727"
+                - "208930100007728"
+                - "208930100007729"
+                - "208930100007730"
+                - "208930100007731"
+                - "208930100007732"
+                - "208930100007733"
+                - "208930100007734"
+                - "208930100007735"
+                - "208930100007736"
+                - "208930100007737"
+                - "208930100007738"
+                - "208930100007739"
+                - "208930100007740"
+                - "208930100007741"
+                - "208930100007742"
+                - "208930100007743"
+                - "208930100007744"
+                - "208930100007745"
+                - "208930100007746"
+                - "208930100007747"
+                - "208930100007748"
+                - "208930100007749"
+                - "208930100007750"
+                - "208930100007751"
+                - "208930100007752"
+                - "208930100007753"
+                - "208930100007754"
+                - "208930100007755"
+                - "208930100007756"
+                - "208930100007757"
+                - "208930100007758"
+                - "208930100007759"
+                - "208930100007760"
+                - "208930100007761"
+                - "208930100007762"
+                - "208930100007763"
+                - "208930100007764"
+                - "208930100007765"
+                - "208930100007766"
+                - "208930100007767"
+                - "208930100007768"
+                - "208930100007769"
+                - "208930100007770"
+                - "208930100007771"
+                - "208930100007772"
+                - "208930100007773"
+                - "208930100007774"
+                - "208930100007775"
+                - "208930100007776"
+                - "208930100007777"
+                - "208930100007778"
+                - "208930100007779"
+                - "208930100007780"
+                - "208930100007781"
+                - "208930100007782"
+                - "208930100007783"
+                - "208930100007784"
+                - "208930100007785"
+                - "208930100007786"
+                - "208930100007787"
+                - "208930100007788"
+                - "208930100007789"
+                - "208930100007790"
+                - "208930100007791"
+                - "208930100007792"
+                - "208930100007793"
+                - "208930100007794"
+                - "208930100007795"
+                - "208930100007796"
+                - "208930100007797"
+                - "208930100007798"
+                - "208930100007799"
+                - "208930100007800"
+                - "208930100007801"
+                - "208930100007802"
+                - "208930100007803"
+                - "208930100007804"
+                - "208930100007805"
+                - "208930100007806"
+                - "208930100007807"
+                - "208930100007808"
+                - "208930100007809"
+                - "208930100007810"
+                - "208930100007811"
+                - "208930100007812"
+                - "208930100007813"
+                - "208930100007814"
+                - "208930100007815"
+                - "208930100007816"
+                - "208930100007817"
+                - "208930100007818"
+                - "208930100007819"
+                - "208930100007820"
+                - "208930100007821"
+                - "208930100007822"
+                - "208930100007823"
+                - "208930100007824"
+                - "208930100007825"
+                - "208930100007826"
+                - "208930100007827"
+                - "208930100007828"
+                - "208930100007829"
+                - "208930100007830"
+                - "208930100007831"
+                - "208930100007832"
+                - "208930100007833"
+                - "208930100007834"
+                - "208930100007835"
+                - "208930100007836"
+                - "208930100007837"
+                - "208930100007838"
+                - "208930100007839"
+                - "208930100007840"
+                - "208930100007841"
+                - "208930100007842"
+                - "208930100007843"
+                - "208930100007844"
+                - "208930100007845"
+                - "208930100007846"
+                - "208930100007847"
+                - "208930100007848"
+                - "208930100007849"
+                - "208930100007850"
+                - "208930100007851"
+                - "208930100007852"
+                - "208930100007853"
+                - "208930100007854"
+                - "208930100007855"
+                - "208930100007856"
+                - "208930100007857"
+                - "208930100007858"
+                - "208930100007859"
+                - "208930100007860"
+                - "208930100007861"
+                - "208930100007862"
+                - "208930100007863"
+                - "208930100007864"
+                - "208930100007865"
+                - "208930100007866"
+                - "208930100007867"
+                - "208930100007868"
+                - "208930100007869"
+                - "208930100007870"
+                - "208930100007871"
+                - "208930100007872"
+                - "208930100007873"
+                - "208930100007874"
+                - "208930100007875"
+                - "208930100007876"
+                - "208930100007877"
+                - "208930100007878"
+                - "208930100007879"
+                - "208930100007880"
+                - "208930100007881"
+                - "208930100007882"
+                - "208930100007883"
+                - "208930100007884"
+                - "208930100007885"
+                - "208930100007886"
+                - "208930100007887"
+                - "208930100007888"
+                - "208930100007889"
+                - "208930100007890"
+                - "208930100007891"
+                - "208930100007892"
+                - "208930100007893"
+                - "208930100007894"
+                - "208930100007895"
+                - "208930100007896"
+                - "208930100007897"
+                - "208930100007898"
+                - "208930100007899"
+                - "208930100007900"
+                - "208930100007901"
+                - "208930100007902"
+                - "208930100007903"
+                - "208930100007904"
+                - "208930100007905"
+                - "208930100007906"
+                - "208930100007907"
+                - "208930100007908"
+                - "208930100007909"
+                - "208930100007910"
+                - "208930100007911"
+                - "208930100007912"
+                - "208930100007913"
+                - "208930100007914"
+                - "208930100007915"
+                - "208930100007916"
+                - "208930100007917"
+                - "208930100007918"
+                - "208930100007919"
+                - "208930100007920"
+                - "208930100007921"
+                - "208930100007922"
+                - "208930100007923"
+                - "208930100007924"
+                - "208930100007925"
+                - "208930100007926"
+                - "208930100007927"
+                - "208930100007928"
+                - "208930100007929"
+                - "208930100007930"
+                - "208930100007931"
+                - "208930100007932"
+                - "208930100007933"
+                - "208930100007934"
+                - "208930100007935"
+                - "208930100007936"
+                - "208930100007937"
+                - "208930100007938"
+                - "208930100007939"
+                - "208930100007940"
+                - "208930100007941"
+                - "208930100007942"
+                - "208930100007943"
+                - "208930100007944"
+                - "208930100007945"
+                - "208930100007946"
+                - "208930100007947"
+                - "208930100007948"
+                - "208930100007949"
+                - "208930100007950"
+                - "208930100007951"
+                - "208930100007952"
+                - "208930100007953"
+                - "208930100007954"
+                - "208930100007955"
+                - "208930100007956"
+                - "208930100007957"
+                - "208930100007958"
+                - "208930100007959"
+                - "208930100007960"
+                - "208930100007961"
+                - "208930100007962"
+                - "208930100007963"
+                - "208930100007964"
+                - "208930100007965"
+                - "208930100007966"
+                - "208930100007967"
+                - "208930100007968"
+                - "208930100007969"
+                - "208930100007970"
+                - "208930100007971"
+                - "208930100007972"
+                - "208930100007973"
+                - "208930100007974"
+                - "208930100007975"
+                - "208930100007976"
+                - "208930100007977"
+                - "208930100007978"
+                - "208930100007979"
+                - "208930100007980"
+                - "208930100007981"
+                - "208930100007982"
+                - "208930100007983"
+                - "208930100007984"
+                - "208930100007985"
+                - "208930100007986"
+                - "208930100007987"
+                - "208930100007988"
+                - "208930100007989"
+                - "208930100007990"
+                - "208930100007991"
+                - "208930100007992"
+                - "208930100007993"
+                - "208930100007994"
+                - "208930100007995"
+                - "208930100007996"
+                - "208930100007997"
+                - "208930100007998"
+                - "208930100007999"
+                - "208930100008000"
+                - "208930100008001"
+                - "208930100008002"
+                - "208930100008003"
+                - "208930100008004"
+                - "208930100008005"
+                - "208930100008006"
+                - "208930100008007"
+                - "208930100008008"
+                - "208930100008009"
+                - "208930100008010"
+                - "208930100008011"
+                - "208930100008012"
+                - "208930100008013"
+                - "208930100008014"
+                - "208930100008015"
+                - "208930100008016"
+                - "208930100008017"
+                - "208930100008018"
+                - "208930100008019"
+                - "208930100008020"
+                - "208930100008021"
+                - "208930100008022"
+                - "208930100008023"
+                - "208930100008024"
+                - "208930100008025"
+                - "208930100008026"
+                - "208930100008027"
+                - "208930100008028"
+                - "208930100008029"
+                - "208930100008030"
+                - "208930100008031"
+                - "208930100008032"
+                - "208930100008033"
+                - "208930100008034"
+                - "208930100008035"
+                - "208930100008036"
+                - "208930100008037"
+                - "208930100008038"
+                - "208930100008039"
+                - "208930100008040"
+                - "208930100008041"
+                - "208930100008042"
+                - "208930100008043"
+                - "208930100008044"
+                - "208930100008045"
+                - "208930100008046"
+                - "208930100008047"
+                - "208930100008048"
+                - "208930100008049"
+                - "208930100008050"
+                - "208930100008051"
+                - "208930100008052"
+                - "208930100008053"
+                - "208930100008054"
+                - "208930100008055"
+                - "208930100008056"
+                - "208930100008057"
+                - "208930100008058"
+                - "208930100008059"
+                - "208930100008060"
+                - "208930100008061"
+                - "208930100008062"
+                - "208930100008063"
+                - "208930100008064"
+                - "208930100008065"
+                - "208930100008066"
+                - "208930100008067"
+                - "208930100008068"
+                - "208930100008069"
+                - "208930100008070"
+                - "208930100008071"
+                - "208930100008072"
+                - "208930100008073"
+                - "208930100008074"
+                - "208930100008075"
+                - "208930100008076"
+                - "208930100008077"
+                - "208930100008078"
+                - "208930100008079"
+                - "208930100008080"
+                - "208930100008081"
+                - "208930100008082"
+                - "208930100008083"
+                - "208930100008084"
+                - "208930100008085"
+                - "208930100008086"
+                - "208930100008087"
+              ip-domain-name: "pool1"
+              ip-domain-expanded:
+                dnn: internet
+                dns-primary: "8.8.8.8"        # Value is sent to UE
+                mtu: 1460                     # Value is sent to UE when PDU Session Established
+                ue-ip-pool: "172.250.1.0/16"  # IP address pool for subscribers
+                ue-dnn-qos:
+                  dnn-mbr-downlink: 200000000 # UE level downlink QoS
+                  dnn-mbr-uplink:    20000000 # UE level uplink QoS
+                  bitrate-unit: bps           # Unit for above QoS rates
+                  traffic-class:              # Default bearer QCI/ARP (not used in 5G)
+                    name: "platinum"
+                    qci: 9
+                    arp: 6
+                    pdb: 300
+                    pelr: 6
+              site-info: "aiab"
+            # UPF allocates IP address if there is only 1 device-group
+            # SMF allocates IP address if there is >1 device-group
+
+            # Configure Network Slices (ignored if provision-network-slice is disabled)
+            network-slices:
+            - name: "default"      # can be any unique slice name
+              slice-id:            # must match with slice configured in gNB, UE
+                sd: "010203"
+                sst: 1
+              site-device-group:
+              - "5g-gnbsim-user-group1"   # All UEs in this device-group are assigned to this slice
+              # Applicaiton filters control what each user can access.
+              # Default, allow access to all applications
+              application-filtering-rules:
+              - rule-name: "ALLOW-ALL"
+                priority: 250
+                action: "permit"
+                endpoint: "0.0.0.0/0"
+              site-info:
+                # Provide gNBs and UPF details and also PLMN for the site
+                gNodeBs:
+                - name: "aiab-gnb1"
+                  tac: 1
+                - name: "aiab-gnb2"
+                  tac: 2
+                plmn:
+                  mcc: "208"
+                  mnc: "93"
+                site-name: "aiab"
+                upf:
+                  upf-name: "upf"  # associated UPF for this slice. One UPF per Slice.
+                  upf-port: 8805
+
+# Override values for omec-user-plane Helm Chart
+# https://gerrit.opencord.org/sdfabric-helm-charts/bess-upf/values.yaml
+omec-user-plane:
+  enable: true
+  nodeSelectors:
+    enabled: true
+  resources:
+    enabled: false
+  images:
+    repository: ""  # image tags below are full references
+    tags:
+      tools: ghcr.io/helix-nextgen-cellular-core/busybox:1.36.1
+      bess: ghcr.io/helix-nextgen-cellular-core/upf-epc-bess:master-5786085
+      pfcpiface: ghcr.io/helix-nextgen-cellular-core/upf-epc-pfcpiface:master-5786085
+    
+  config:
+    upf:
+      name: "oaisim"
+      sriov:
+        enabled: false    # SRIOV is disabled by default
+      hugepage:
+        enabled: false    # Should be enabled if DPDK is enabled
+      cniPlugin: macvlan  # Can be any other plugin. Dictates how IP address are assigned
+      ipam: static
+      routes:
+        - to: {{ ansible_default_ipv4.address }}
+          via: 169.254.1.1
+      enb:
+        subnet: {{ ran_subnet }} # Subnet for the gNB network
+      access:
+        iface: {{ core.data_iface }}
+      core:
+        iface: {{ core.data_iface }}
+      cfgFiles:
+        upf.json:
+          mode: af_packet     # This mode implies no DPDK
+          hwcksum: true
+          log_level: "error"
+          gtppsc: true        # Extension header enabled in 5G.
+          cpiface:
+            dnn: "internet"              # Must match Slice dnn
+            hostname: "upf"
+            enable_ue_ip_alloc: false    # If true, UPF allocates address from following pool
+            ue_ip_pool: "172.250.0.0/16" # IP pool used UEs if enable_ue_ip_alloc=true

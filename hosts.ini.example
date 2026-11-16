@@ -1,0 +1,34 @@
+# Helix testbed inventory.
+#   cp hosts.ini.example hosts.ini   (hosts.ini is git-ignored)
+#
+# Minimal testbed: one Kubernetes node running the Helix core and one node
+# running gnbsim. The storage node collects experiment logs and can be the
+# gnbsim node itself.
+#
+# Ansible connects over SSH with keys (ssh-agent is forwarded into the
+# Ansible container by `make start-ansible`). The SSH user needs passwordless
+# sudo, or add `ansible_become_pass=...` here (never commit it).
+
+[master_nodes]
+node1      ansible_host=10.0.0.10  ansible_user=ubuntu
+
+[worker_nodes]
+# node2    ansible_host=10.0.0.11  ansible_user=ubuntu
+
+# Node(s) where the Helix core runs (usually the k8s master).
+[aether_nodes]
+node1
+
+[gnbsim_nodes]
+gnb-node1  ansible_host=10.0.0.20  ansible_user=ubuntu
+
+[storage_nodes]
+gnb-node1
+
+[all:vars]
+# Core node's address on the data-plane NIC (README §2), not its ansible_host.
+helix_core_ip=10.10.0.1
+# Data-plane NIC name, the same on the core and gnbsim nodes.
+helix_data_iface=enp1s0np0
+# Directory on the storage node where experiment logs are collected.
+helix_logs_dir=/home/ubuntu/helix-logs

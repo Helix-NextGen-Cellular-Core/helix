@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Runs a command inside the Ansible control container, with the repo mounted
+# at /workdir and the host's ssh-agent forwarded (load your key with `ssh-add`
+# on the host first).
+#
+# Override the image with ANSIBLE_IMG=<image> to use your own build.
+
+ANSIBLE_NAME=${ANSIBLE_NAME:-ansible}
+ANSIBLE_IMG=${ANSIBLE_IMG:-ghcr.io/helix-nextgen-cellular-core/ansible:2.12.1}
+ANSIBLE_MOUNT_DIR=${ANSIBLE_MOUNT_DIR:-${PWD}}
+
+SSH_AGENT_ARGS=()
+if [ -n "${SSH_AUTH_SOCK}" ] && [ -S "${SSH_AUTH_SOCK}" ]; then
+  SSH_AGENT_ARGS=(-v "${SSH_AUTH_SOCK}":/ssh-agent -e SSH_AUTH_SOCK=/ssh-agent)
+else
+  echo "warning: no ssh-agent found on the host (SSH_AUTH_SOCK); run 'eval \$(ssh-agent) && ssh-add' first" >&2
+fi
+
+# Interactive shell when run from a terminal; plain command otherwise (scripts, CI, agents):
+#   deps/platform/scripts/ansible make start-platform
+TTY_ARGS=(-i); [ -t 0 ] && [ -t 1 ] && TTY_ARGS=(-it)
+
+# Image-set switches (see core/values/images/), passed through when set on the host.
+ENV_ARGS=()
+for v in HELIX_IMAGES GNBSIM_IMAGE EXPERIMENT_MAX_WAIT; do [ -n "${!v}" ] && ENV_ARGS+=(-e "$v"); done
+
+docker run "${TTY_ARGS[@]}" --rm \
+  --name ${ANSIBLE_NAME} \
+  --network host \
+  "${SSH_AGENT_ARGS[@]}" "${ENV_ARGS[@]}" \
+  -v "${ANSIBLE_MOUNT_DIR}":/workdir -w /workdir \
+  ${ANSIBLE_IMG} "$@"

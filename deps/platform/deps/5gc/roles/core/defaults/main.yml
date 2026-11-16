@@ -1,0 +1,10 @@
+core:  
+  standalone: "true"
+  data_iface: data
+  values_file: "core/values/helix.yaml"
+  helm:
+    chart_ref: aether/sd-core
+    chart_version: 0.12.6 
+  pods:
+    amf: 1
+    smf: 1

@@ -1,0 +1,13 @@
+  
+gnbsim:
+  docker:
+    container:
+      image: ghcr.io/helix-nextgen-cellular-core/gnbsim:v1.0.0
+      count: 2
+    network:
+      macvlan:
+        name: gnbnet
+  
+  router:
+    mcavlan:
+      iface: gnbaccess

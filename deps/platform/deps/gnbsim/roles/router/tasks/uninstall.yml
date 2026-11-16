@@ -1,0 +1,85 @@
+---
+
+- set_fact:
+    systemd_network_dir: /etc/systemd/network
+
+- name: configure static route for upf traffic on gnbsim node
+  shell: |
+    ip route del {{ gnbsim.core.upf.ip_prefix }} via {{ gnbsim.core.amf.ip }}
+  when: (inventory_hostname in groups['gnbsim_nodes']) and (inventory_hostname not in groups['aether_nodes'])
+  become: true
+  ignore_errors: yes
+
+- name: configure static route for gnbsim traffic on aether node
+  shell: |
+    ip route del {{ gnbsim.router.macvlan.prefix }}.{{ lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', item) }}.0/24 via {{  hostvars[item]['ansible_%s' | format(gnbsim.router.data_iface)]['ipv4']['address']}}
+  with_items: "{{ play_hosts | intersect(groups['gnbsim_nodes']) }}"
+  when: (inventory_hostname in groups['aether_nodes']) and (inventory_hostname not in groups['gnbsim_nodes'])
+  become: true
+  ignore_errors: yes
+
+- name: "remove iptable rule: forward from {{ gnbsim.router.data_iface }} to {{ gnbsim.router.macvlan.iface }}"
+  iptables:
+    chain: FORWARD
+    in_interface: "{{ gnbsim.router.data_iface }}"
+    out_interface: "{{ gnbsim.router.macvlan.iface }}"
+    jump: ACCEPT
+    state: absent
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: "remove iptable rule: forward from {{ gnbsim.router.macvlan.iface }} to {{ gnbsim.router.data_iface }}"
+  iptables:
+    chain: FORWARD
+    in_interface: "{{ gnbsim.router.macvlan.iface }}"
+    out_interface: "{{ gnbsim.router.data_iface }}"
+    jump: ACCEPT
+    state: absent
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: post-delete steps
+  shell: |
+    ip addr del {{ subnet_address }} dev {{ gnbsim.router.macvlan.iface }}
+    ip link set dev {{ gnbsim.router.macvlan.iface }} down
+    ip link del {{ gnbsim.router.macvlan.iface }} || true
+  vars:
+    subnet_address: "{{ gnbsim.router.macvlan.prefix }}.{{ lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', inventory_hostname) }}.1/24" 
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.arp_filter to 0
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_filter
+    value: '0'
+    sysctl_set: true
+    reload: true
+  when: (inventory_hostname in groups['gnbsim_nodes']) and (inventory_hostname not in groups['aether_nodes'])
+  become: true
+
+- name: set net.ipv4.conf.all.arp_ignore to 0
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_ignore
+    value: '0'
+    sysctl_set: true
+    reload: true
+  when: (inventory_hostname in groups['gnbsim_nodes']) and (inventory_hostname not in groups['aether_nodes'])
+  become: true
+
+- name: set net.ipv4.conf.all.arp_announce to 0
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_announce
+    value: '0'
+    sysctl_set: true
+    reload: true
+  when: (inventory_hostname in groups['gnbsim_nodes']) and (inventory_hostname not in groups['aether_nodes'])
+  become: true
+
+- name: set net.ipv4.conf.all.rp_filter to 2
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.rp_filter
+    value: '2'
+    sysctl_set: true
+    reload: true
+  when: (inventory_hostname in groups['gnbsim_nodes']) and (inventory_hostname not in groups['aether_nodes'])
+  become: true

@@ -1,0 +1,24 @@
+collector:
+  storage:
+    logs_dir: "{{ helix_logs_dir }}"
+gnbsim:
+  autoscaling:
+    cpuLoad: 60
+    enabled: true
+    maxPods: 5
+    podstartdelay: 17
+  core:
+    amf:
+      ip: "{{ helix_core_ip }}"
+  docker:
+    network:
+      macvlan:
+        name: gnbnet
+  servers:
+    config: experiments/autoscaling/SR/SR-256ues-30000events-10ms-parallel-autoscaling-16gnbsim-startImsiDelay1/gnbsim.yaml
+    logs_dir: /tmp/gnbsim-logs
+    pods:
+      count: 16
+  ues:
+    count_per_pod: 16
+    start_imsi: 208930100007487

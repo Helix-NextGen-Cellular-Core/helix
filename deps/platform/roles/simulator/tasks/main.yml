@@ -1,0 +1,5 @@
+---
+
+- name: install platform/simulator
+  include: roles/simulator/tasks/start.yml
+  tags: start

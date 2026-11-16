@@ -1,0 +1,11 @@
+---
+
+- name: debug hosts
+  hosts: all
+  gather_facts: true
+
+  tasks:
+
+  - name: print play_hosts
+    debug:
+      msg: "{{ play_hosts }}"

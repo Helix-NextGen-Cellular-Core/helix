@@ -1,0 +1,34 @@
+---
+
+- name: pull {{ lookup('env', 'GNBSIM_IMAGE') or gnbsim.docker.container.image }} image
+  community.docker.docker_image:
+    name: "{{ lookup('env', 'GNBSIM_IMAGE') or gnbsim.docker.container.image }}"
+    source: pull
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: create macvlan:{{ gnbsim.docker.network.macvlan.name }} network
+  community.docker.docker_network:
+    name: "{{ gnbsim.docker.network.macvlan.name }}"
+    driver: macvlan
+    driver_options:
+      parent: "{{ gnbsim.router.macvlan.iface }}"
+    ipam_config:
+      - subnet: "{{ address_prefix }}.0/24"
+        gateway: "{{ address_prefix }}.1"
+    state: present
+  vars:
+    address_prefix: "{{ gnbsim.router.macvlan.prefix }}.{{ lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', inventory_hostname) }}"
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: create {{ lookup('env', 'GNBSIM_IMAGE') or gnbsim.docker.container.image }} containers
+  community.docker.docker_container:
+    name: "gnbsim-{{ item }}"
+    image: "{{ lookup('env', 'GNBSIM_IMAGE') or gnbsim.docker.container.image }}"
+    network_mode: "{{ gnbsim.docker.network.macvlan.name }}"
+    command: ["sleep", "infinity"]
+    state: started
+  with_sequence: start=0 end={{ gnbsim.docker.container.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true

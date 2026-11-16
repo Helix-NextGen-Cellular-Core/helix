@@ -1,0 +1,18 @@
+gnbsim:
+  docker:
+    network:
+      macvlan:
+        name: gnbnet
+
+  core:
+    amf:
+      ip: "{{ helix_core_ip }}"
+
+  servers:
+    config: "config/gnbsim.template.SR.yaml"
+    pods:
+      count: 2
+
+  ues:
+    imsi_base: 208930100007487
+    count_per_pod: 2

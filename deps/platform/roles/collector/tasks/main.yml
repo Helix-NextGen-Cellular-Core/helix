@@ -1,0 +1,5 @@
+---
+
+- name: install platform/collector
+  include: roles/collector/tasks/collect.yml
+  tags: collect

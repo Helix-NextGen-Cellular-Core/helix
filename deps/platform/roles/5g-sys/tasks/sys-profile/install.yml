@@ -1,0 +1,96 @@
+---
+
+- name: install prometheus pre-requisites
+  pip:
+    name:
+      - kubernetes
+      - pandas 
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- name: add node label for prometheus
+  shell:
+    cmd: kubectl label nodes {{ groups['aether_nodes'][0] }} --overwrite prometheus=enabled
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- name: create a prometheus namespace in k8s
+  k8s:
+    name: prometheus
+    api_version: v1
+    kind: Namespace
+    state: present
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- name: add prometheus-community chart repo
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: "https://prometheus-community.github.io/helm-charts"
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- name: add prometheus label on {{ groups['aether_nodes'][0] }}
+  kubernetes.core.k8s:
+    state: present
+    kind: Node
+    name: "{{ groups['aether_nodes'][0] }}"
+    definition:
+      metadata:
+        labels:
+          prometheus: enabled
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- name: deploy prometheus operator in k8s
+  kubernetes.core.helm:
+    name: prometheus
+    chart_ref: prometheus-community/kube-prometheus-stack
+    release_namespace: prometheus
+    values:
+      ingress:
+        serviceMonitor:
+          interval: "1s"
+          alertmanagerSpec:
+            nodeSelector:
+              prometheus: enabled
+      grafana:
+        serviceMonitor:
+          interval: "1s"
+        nodeSelector:
+          prometheus: enabled
+      kubeApiServer:
+        serviceMonitor:
+          interval: "1s"
+      kubelet:
+        serviceMonitor:
+          interval: "1s"
+      kubeControllerManager:
+        serviceMonitor:
+          interval: "1s"
+      kube-state-metrics:
+        prometheus:
+          monitor:
+            interval: "1s"
+        nodeSelector:
+          prometheus: enabled
+      prometheus-node-exporter:
+        prometheus:
+          monitor:
+            interval: "1s"
+        nodeSelector:
+          prometheus: enabled
+      prometheusOperator:
+        serviceMonitor:
+          interval: "1s"
+        admissionWebhooks:
+          patch:
+            nodeSelector:
+              prometheus: enabled
+        nodeSelector:
+          prometheus: enabled
+      prometheus:
+        thanosServiceMonitor:
+          interval: "1s"
+        serviceMonitor:
+          interval: "1s"
+        prometheusSpec:
+          scrapeInterval: "1s"
+          nodeSelector:
+            prometheus: enabled
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined

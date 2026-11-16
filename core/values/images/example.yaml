@@ -1,0 +1,7 @@
+# Example image set. Use it with HELIX_IMAGES=example (see README §6); it is overlaid on the core profile's
+# Helm values. List only the images you want to replace.
+5g-control-plane:
+  images:
+    tags:
+      amf: ghcr.io/helix-nextgen-cellular-core/amf:v1.0.0
+      smf: ghcr.io/helix-nextgen-cellular-core/smf:v1.0.0

@@ -1,0 +1,10 @@
+# Local testbed inventory (copy from hosts.ini.example)
+hosts.ini
+
+# Large inputs distributed separately (see README)
+realTraces/
+
+*.retry
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

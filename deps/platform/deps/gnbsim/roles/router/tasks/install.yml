@@ -1,0 +1,81 @@
+---
+
+- set_fact:
+    systemd_network_dir: /etc/systemd/network
+
+- name: set net.ipv4.conf.all.arp_filter to 1
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_filter
+    value: '1'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.arp_ignore to 1
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_ignore
+    value: '1'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.arp_announce to 2
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.arp_announce
+    value: '2'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: set net.ipv4.conf.all.rp_filter to 2
+  ansible.posix.sysctl:
+    name: net.ipv4.conf.all.rp_filter
+    value: '2'
+    sysctl_set: true
+    reload: true
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: post-install steps ...
+  shell: |
+    ip link show {{ gnbsim.router.macvlan.iface }} >/dev/null 2>&1 || ip link add {{ gnbsim.router.macvlan.iface }} link {{ gnbsim.router.data_iface }} type macvlan mode bridge
+    ip link set dev {{ gnbsim.router.macvlan.iface }} up
+    ip addr replace {{ subnet_address }} dev {{ gnbsim.router.macvlan.iface }}
+  vars:
+    subnet_address: "{{ gnbsim.router.macvlan.prefix }}.{{ lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', inventory_hostname) }}.1/24"  
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: "add iptable rule: forward from {{ gnbsim.router.data_iface }} to {{ gnbsim.router.macvlan.iface }}"
+  iptables:
+    chain: FORWARD
+    in_interface: "{{ gnbsim.router.data_iface }}"
+    out_interface: "{{ gnbsim.router.macvlan.iface }}"
+    jump: ACCEPT
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: "add iptable rule: forward from {{ gnbsim.router.macvlan.iface }} to {{ gnbsim.router.data_iface }}"
+  iptables:
+    chain: FORWARD
+    in_interface: "{{ gnbsim.router.macvlan.iface }}"
+    out_interface: "{{ gnbsim.router.data_iface }}"
+    jump: ACCEPT
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: configure static route for upf traffic on gnbsim node
+  shell: |
+    ip route replace {{ gnbsim.core.upf.ip_prefix }} via {{ gnbsim.core.amf.ip }}
+  when: (inventory_hostname in groups['gnbsim_nodes']) and (inventory_hostname not in groups['aether_nodes'])
+  become: true
+
+- name: configure static route for gnbsim traffic on aether node
+  shell: |
+    ip route replace {{ gnbsim.router.macvlan.prefix }}.{{ lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', item) }}.0/24 via {{  hostvars[item]['ansible_%s' | format(gnbsim.router.data_iface)]['ipv4']['address'] }}
+  with_items: "{{ play_hosts | intersect(groups['gnbsim_nodes']) }}"
+  when: (inventory_hostname in groups['aether_nodes']) and (inventory_hostname not in groups['gnbsim_nodes'])
+  become: true

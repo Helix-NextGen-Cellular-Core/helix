@@ -1,0 +1,13 @@
+fullnameOverride: mongodb1
+persistence:
+ enabled: false
+auth:
+ enabled: false
+serviceAccount:
+ create: false
+usePassword: false
+persistence:
+ enabled: false
+#enable following 2 lines if cluster needs to be enabled
+architecture: replicaset
+replicaCount: 2

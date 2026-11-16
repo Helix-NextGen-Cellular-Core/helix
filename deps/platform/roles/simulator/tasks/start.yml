@@ -1,0 +1,287 @@
+
+- set_fact:
+    network_macvlan_name: "{{ gnbsim.docker.network.macvlan.name }}"
+    ues_count_per_vm: "{{ gnbsim.servers.pods.count * gnbsim.ues.count_per_pod }}"
+
+- name: get info on gnbsim containers
+  community.docker.docker_container_info:
+    name: "gnbsim-{{ item }}"
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  register: container_info
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: create a list of start imsis per pod per server
+  set_fact:
+    start_imsis: "{{ start_imsis | default([]) + [{
+      inventory_hostname + '_' + item|string: (gnbsim.ues.imsi_base + 
+        (lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', inventory_hostname) * ues_count_per_vm|int) +
+        (item|int * gnbsim.ues.count_per_pod)),
+      }] }}"
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes']
+
+- name: copy config files to gnbsim host
+  template:
+    src: "{{ ROOT_DIR }}/{{ gnbsim.servers.config }}"
+    dest: /tmp/gnbsim-{{ item }}.yaml
+  vars:
+    container_ip: "{{ container_info.results[item|int].container.NetworkSettings.Networks[network_macvlan_name].IPAddress }}"
+    gnb_value: "{{ ('%03x' % lookup('ansible.utils.index_of', groups['gnbsim_nodes'], 'eq', inventory_hostname)) + ('%03x' % item|int) }}"
+    amf_ip: "{{ gnbsim.core.amf.ip }}"
+    ue_count: "{{ gnbsim.ues.count_per_pod }}"
+    start_imsi: "{{ start_imsis[item|int][inventory_hostname + '_' + item|string]}}"
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes']
+
+- name: copy config files into gnbsim containers
+  shell: |
+    docker cp /tmp/gnbsim-{{ item }}.yaml \
+      gnbsim-{{ item }}:/tmp/gnbsim.yaml
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+
+- name: make core status directory on core 
+  shell: |
+      rm -rf /tmp/corelogs/;
+      mkdir -p /tmp/corelogs/;
+  when: inventory_hostname in groups['aether_nodes']
+  
+- name: copy total_cpu_usage.sh files to aether host if gnbsim.autoscaling is defined
+  copy:
+    src: "{{ ROOT_DIR }}/total_cpu_usage.sh"
+    dest: /tmp/total_cpu_usage.sh
+    force: yes    
+  when: inventory_hostname in groups['aether_nodes'][0] and gnbsim.autoscaling is defined
+
+- name: copy run_monitor_pid.sh files to aether host if gnbsim.autoscaling is defined
+  copy:
+    src: "{{ ROOT_DIR }}/run_monitor_pid.sh"
+    dest: /tmp/run_monitor_pid.sh
+    force: yes    
+  when: inventory_hostname in groups['aether_nodes'][0] and gnbsim.autoscaling is defined
+
+# Trace files are not in git: put them in <repo>/{{ gnbsim.realTrace.folder_path }} on the control machine (see README).
+- name: copy realTrace files to gnbsim host if gnbsim.realTrace defined
+  copy:
+    src: "{{ ROOT_DIR }}/{{ gnbsim.realTrace.folder_path }}/{{ item }}"
+    dest: /tmp/{{ item }}
+    force: no
+  with_items:
+    - "{{ gnbsim.realTrace.SR_file }}"
+    - "{{ gnbsim.realTrace.S1_file }}"
+  when: inventory_hostname in groups['gnbsim_nodes'] and gnbsim.realTrace is defined
+
+- name: copy realTrace files into gnbsim containers
+  shell: |
+    docker cp /tmp/{{ gnbsim.realTrace.SR_file }} gnbsim-{{ item }}:/root/{{ gnbsim.realTrace.SR_file }}
+    docker cp /tmp/{{ gnbsim.realTrace.S1_file }} gnbsim-{{ item }}:/root/{{ gnbsim.realTrace.S1_file }}
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes'] and gnbsim.realTrace is defined
+  become: true
+
+- name: run run_monitor_pid.sh if gnbsim.autoscaling is defined
+  shell: 
+    cmd: /bin/bash /tmp/run_monitor_pid.sh &
+  register: bash_output
+  async: 1000
+  poll: 0
+  become: true
+  when: inventory_hostname in groups['aether_nodes'][0] and gnbsim.autoscaling is defined
+
+- name: run HPA if gnbsim.autoscaling is defined
+  shell: |
+    kubectl autoscale -n omec deployment amf --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+    kubectl autoscale -n omec deployment smf --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+    kubectl autoscale -n omec deployment udm --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+    kubectl autoscale -n omec deployment udr --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+    kubectl autoscale -n omec deployment pcf --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+    kubectl autoscale -n omec deployment nssf --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+    kubectl autoscale -n omec deployment ausf --cpu-percent={{ gnbsim.autoscaling.cpuLoad }} --min=1 --max={{ gnbsim.autoscaling.maxPods }}
+  when: inventory_hostname in groups['aether_nodes'][0] and gnbsim.autoscaling is defined and gnbsim.autoscaling.enabled is defined
+
+- name: strore exp start timestamp for prometheus
+  shell:
+    cmd: echo $(date +%s%N) > /tmp/exp_timestamp
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+# Autoscaling experiments start the gnbsim containers one after another, podstartdelay seconds apart,
+# so UEs keep arriving while the core scales out.
+- name: async start gnbsims autoscaling
+  community.docker.docker_container_exec:
+    container: "gnbsim-{{ item }}"
+    command: /bin/bash -c "rm -rf /gnbsim/bin/*.log; rm -f /gnbsim/bin/*.config; rm -rf /tmp/gnbsim-logs; mkdir /tmp/gnbsim-logs;
+             /gnbsim/bin/gnbsim --cfg /tmp/gnbsim.yaml 2&> /tmp/gnbsim-logs/{{ inventory_hostname }}-gnbsim-{{ item }}-{{ ansible_date_time.iso8601_basic_short }}.log;
+             cp -f /tmp/gnbsim.yaml /tmp/gnbsim-logs/{{ inventory_hostname }}-gnbsim-{{ item }}-{{ ansible_date_time.iso8601_basic_short }}.config;
+             echo '{{ PLATFORM_PARAMS | to_nice_yaml }}' > /tmp/gnbsim-logs/{{ inventory_hostname }}-gnbsim-{{ item }}-{{ ansible_date_time.iso8601_basic_short }}.params;"
+  async: 45
+  poll: 0
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  loop_control:
+    pause: "{{ (gnbsim.autoscaling | default({})).podstartdelay | default(0) | int }}"
+  when: inventory_hostname in groups['gnbsim_nodes'] and gnbsim.autoscaling is defined
+  become: true
+
+#       /opt/intel/oneapi/vtune/latest/bin64/vtune -collect hotspots -collect threading -collect hpc-performance -collect memory-access -collect io -knob sampling-mode=hw -knob enable-stack-collection=true -knob stack-size=8192 --duration 140 -r /tmp/vtune_logs-8192stack/ & 
+
+# Each real-trace gnbsim starts at the next whole minute after its launch; launching between :05 and :40 keeps all
+# launches (~6 s) in one minute, so every container starts together.
+- name: wait for a launch window (real traces)
+  shell: |
+    s=$((10#$(date +%S)))
+    if [ $s -lt 5 ]; then sleep $((5 - s)); elif [ $s -gt 40 ]; then sleep $((65 - s)); fi
+  args:
+    executable: /bin/bash
+  when: inventory_hostname in groups['gnbsim_nodes'] and gnbsim.realTrace is defined and gnbsim.autoscaling is undefined
+
+- name: async start gnbsims
+  community.docker.docker_container_exec:
+    container: "gnbsim-{{ item }}"
+    command: /bin/bash -c "rm -rf /gnbsim/bin/*.log; rm -f /gnbsim/bin/*.config; rm -rf /tmp/gnbsim-logs; mkdir /tmp/gnbsim-logs;
+             /gnbsim/bin/gnbsim --cfg /tmp/gnbsim.yaml 2&> /tmp/gnbsim-logs/{{ inventory_hostname }}-gnbsim-{{ item }}-{{ ansible_date_time.iso8601_basic_short }}.log;
+             cp -f /tmp/gnbsim.yaml /tmp/gnbsim-logs/{{ inventory_hostname }}-gnbsim-{{ item }}-{{ ansible_date_time.iso8601_basic_short }}.config;
+             echo '{{ PLATFORM_PARAMS | to_nice_yaml }}' > /tmp/gnbsim-logs/{{ inventory_hostname }}-gnbsim-{{ item }}-{{ ansible_date_time.iso8601_basic_short }}.params;"
+  async: 45
+  poll: 0
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes'] and gnbsim.autoscaling is undefined
+  become: true
+
+- name: run get_pprof_files.sh
+  shell:
+    cmd: |
+      /bin/bash {{ ansible_env.HOME }}/user-observed-performance-tool/get_pprof_files.sh {{ ansible_date_time.iso8601_basic_short }} &
+  when: inventory_hostname in groups['aether_nodes'][0] and core.srvprofiling is defined
+
+- pause:
+    seconds: 1
+
+- name: async check gnbsims
+  shell: |
+    ps aux | grep "\-\-cfg\ /tmp/gnbsim" | wc -l
+  register: async_result
+  until: async_result.stdout == "0"
+  # gnbsims still running after EXPERIMENT_MAX_WAIT seconds (default 500) are stopped below
+  retries: "{{ ((lookup('env', 'EXPERIMENT_MAX_WAIT') or 500) | int / 10) | round(0, 'ceil') | int }}"
+  delay: 10
+  when: inventory_hostname in groups['gnbsim_nodes']
+  ignore_errors: yes
+  
+- debug:
+    var: "async_result.stdout"
+
+- name: force stop gnbsims
+  shell: |
+    pkill -9 -f /gnbsim/bin/gnbsim
+  become: true
+  when: inventory_hostname in groups['gnbsim_nodes']
+  ignore_errors: yes
+
+- name: strore exp start timestamp for prometheus
+  shell:
+    cmd: echo $(date +%s%N) >> /tmp/exp_timestamp
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- pause:
+    seconds: 10
+  when: core.sysprofiling is defined
+
+- name: get prometheus stats 
+  shell:
+    cmd: |
+      cd {{ ansible_env.HOME }}/user-observed-performance-tool/get_pod_stats;
+      mkdir -p /tmp/corelogs/prom/
+      python3 get_prom_stats.py /tmp/corelogs/prom/
+  ignore_errors: yes
+  when: inventory_hostname in groups['aether_nodes'][0] and core.sysprofiling is defined
+
+- pause:
+    seconds: 2
+  when: core.srvprofiling is defined
+
+- name: run user-observed-performance-tool/logs_parsing_stuff/get_gr.py
+  shell: |
+      python3 {{ ansible_env.HOME }}/user-observed-performance-tool/logs_parsing_stuff/get_gr.py
+  when: inventory_hostname in groups['aether_nodes'][0] and core.srvprofiling is defined
+
+- pause:
+    seconds: 2
+  when: core.srvprofiling is defined
+
+- name: run /user-observed-performance-tool/logs_parsing_stuff/get_exec.py
+  shell: |
+      python3 {{ ansible_env.HOME }}/user-observed-performance-tool/logs_parsing_stuff/get_exec.py
+  when: inventory_hostname in groups['aether_nodes'][0] and core.srvprofiling is defined
+
+- name: delete HPA if gnbsim.autoscaling is defined
+  shell: |
+    kubectl delete hpa amf -n omec
+    kubectl delete hpa smf -n omec
+    kubectl delete hpa udm -n omec
+    kubectl delete hpa udr -n omec
+    kubectl delete hpa pcf -n omec
+    kubectl delete hpa nssf -n omec
+    kubectl delete hpa ausf -n omec
+  when: inventory_hostname in groups['aether_nodes'][0] and gnbsim.autoscaling is defined and gnbsim.autoscaling.enabled is defined
+  ignore_errors: yes
+
+- pause:
+    seconds: 30
+  when: gnbsim.autoscaling is defined  
+
+- name: force stop run_monitor_pid.sh
+  shell: |
+    pkill -9 -f run_monitor_pid.sh
+  become: true
+  when: inventory_hostname in groups['aether_nodes'][0] and gnbsim.autoscaling is defined
+  ignore_errors: yes
+
+- name: Get Pods Status
+  shell: 
+    cmd: kubectl get po -n omec -o wide
+  register: pod_status
+  changed_when: false
+  when: inventory_hostname in groups['aether_nodes']
+
+- name: get pod logs 
+  shell: |
+    while IFS= read -r line; do
+      name=$(echo "$line" | awk '{print $1}')
+      if [[ "$name" == *"amf"* || "$name" == *"smf"* || "$name" == *"sctplb"* || "$name" == *"udr"* || "$name" == *"udm"* || "$name" == *"nrf"* || "$name" == *"pcf"* || "$name" == *"ausf"* || "$name" == *"nssf"* ]]; then
+          kubectl logs "$name" -n omec --timestamps > /tmp/corelogs/"$name"-{{ ansible_date_time.iso8601_basic_short }}.log        
+      fi
+    done <<< "{{ pod_status.stdout }}"
+  args:
+    executable: /bin/bash
+  when: inventory_hostname in groups['aether_nodes']
+
+- name: run user-observed-performance-tool/otel_sctipts/ scripts
+  shell: |
+      mkdir -p /tmp/corelogs/otelLogs
+      python3 {{ ansible_env.HOME }}/user-observed-performance-tool/otel_sctipts/get_otel_log.py /tmp/corelogs/otelLogs
+  when: inventory_hostname in groups['aether_nodes'][0] and core.otelProcess is defined
+
+#       python3 {{ ansible_env.HOME }}/user-observed-performance-tool/otel_sctipts/process_otel_log.py /tmp/corelogs/otelLogs/
+#       python3 {{ ansible_env.HOME }}/user-observed-performance-tool/otel_sctipts/process_otel_log-v2.py /tmp/corelogs/otelLogs/reg_pdu_srv-5.csv > /tmp/corelogs/otelLogs/otel_FinalOutput.txt
+
+- name: Get Pods Status
+  shell: 
+    cmd: kubectl get po -n omec -o wide > /tmp/corelogs/Pods.log
+  register: pod_status
+  changed_when: false
+  when: inventory_hostname in groups['aether_nodes']
+
+- name: coy sdcore config file
+  shell: 
+    cmd: cp /tmp/sdcore-5g-values.yaml /tmp/corelogs/sdcore-5g-values.yaml
+  register: pod_status
+  changed_when: false
+  when: inventory_hostname in groups['aether_nodes']
+
+- name: copy gnbsim confifg file 
+  copy:
+    src: "{{ ROOT_DIR }}/experiments/{{ PLATFORM_PARAMS['EXPERIMENT_TYPE'] }}/vars.yml"
+    dest: /tmp/corelogs/gnbsim.config
+    force: yes    
+  when: inventory_hostname in groups['aether_nodes'][0]

@@ -1,0 +1,65 @@
+---
+
+- set_fact:
+    ssh_opts_defaults: "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+    # Key-based by default (ssh-agent is forwarded, see ansible.cfg);
+    # falls back to sshpass only if the storage node has ansible_password set.
+    scp_cmd: "{{ ('sshpass -p ' ~ (ansible_password | quote) ~ ' scp') if ansible_password is defined else 'scp' }}"
+
+- name: install sshpass package
+  apt:
+    name: sshpass
+  when: (inventory_hostname in groups['gnbsim_nodes'] or inventory_hostname in groups['aether_nodes'])
+        and (groups['storage_nodes'] | map('extract', hostvars, 'ansible_password') | select('defined') | list | length > 0)
+  become: true
+
+- name: remove logs dir from each pod per server
+  file:
+    path: "{{ gnbsim.servers.logs_dir }}"
+    state: absent
+  become: true
+  when: inventory_hostname in groups['gnbsim_nodes']
+
+- name: create logs dir on each pod per server
+  file:
+    path: "{{ gnbsim.servers.logs_dir }}/{{ inventory_hostname }}"
+    state: directory
+  when: inventory_hostname in groups['gnbsim_nodes']
+
+- name: collect logs from pods to server
+  shell: |
+      docker cp gnbsim-{{ item }}:/tmp/gnbsim-logs/. {{ gnbsim.servers.logs_dir }}/{{ inventory_hostname }}
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes']
+  become: true
+  ignore_errors: yes
+
+- name: collect otelProcess from pods to server
+  shell: |
+      docker cp gnbsim-{{ item }}:/root/otelTraces-gnbsim.txt {{ gnbsim.servers.logs_dir }}/{{ inventory_hostname }}/otelTraces-gnbsim-{{ item }}.txt
+  with_sequence: start=0 end={{ gnbsim.servers.pods.count - 1 }}
+  when: inventory_hostname in groups['gnbsim_nodes'] and core.otelProcess is defined
+  become: true
+  ignore_errors: yes
+
+- name: make logs dir on storage server -> {{ collector.storage.logs_dir }}/{{ collector.storage.logs_prefix }}/{{ PLATFORM_PARAMS['EXPERIMENT_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_5GC_TYPE'] }}/{{ PLATFORM_PARAMS['GNBSIM_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_CLUSTER_VERSION'] }}/{{ ansible_date_time.iso8601_basic_short }}
+  shell: |
+    mkdir -p {{ collector.storage.logs_dir }}/{{ collector.storage.logs_prefix }}/{{ PLATFORM_PARAMS['EXPERIMENT_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_5GC_TYPE'] }}/{{ PLATFORM_PARAMS['GNBSIM_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_CLUSTER_VERSION'] }}/{{ ansible_date_time.iso8601_basic_short }}
+  when: inventory_hostname in groups['storage_nodes']
+
+- name: transfer logs to storage node -> {{ gnbsim.servers.logs_dir }} to {{ collector.storage.logs_dir }}/{{ collector.storage.logs_prefix }}/{{ PLATFORM_PARAMS['EXPERIMENT_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_5GC_TYPE'] }}/{{ PLATFORM_PARAMS['GNBSIM_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_CLUSTER_VERSION'] }}/{{ ansible_date_time.iso8601_basic_short }}
+  shell: |
+    {{ scp_cmd }} {{ ssh_opts_defaults }} -r \
+      {{ gnbsim.servers.logs_dir }} \
+      {{ ansible_user }}@{{ ansible_host }}:'{{ collector.storage.logs_dir }}/{{ collector.storage.logs_prefix }}/{{ PLATFORM_PARAMS['EXPERIMENT_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_5GC_TYPE'] }}/{{ PLATFORM_PARAMS['GNBSIM_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_CLUSTER_VERSION'] }}/{{ ansible_date_time.iso8601_basic_short }}/'
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['gnbsim_nodes'] }}"
+  when: inventory_hostname in groups['storage_nodes']
+
+- name: transfer core status to the storage node from /tmp/corelogs
+  shell: |
+    {{ scp_cmd }} {{ ssh_opts_defaults }} -r \
+      /tmp/corelogs/ \
+      {{ ansible_user }}@{{ ansible_host }}:'{{ collector.storage.logs_dir }}/{{ collector.storage.logs_prefix }}/{{ PLATFORM_PARAMS['EXPERIMENT_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_5GC_TYPE'] }}/{{ PLATFORM_PARAMS['GNBSIM_TYPE'] }}/{{ PLATFORM_PARAMS['CORE_CLUSTER_VERSION'] }}/{{ ansible_date_time.iso8601_basic_short }}/'
+  delegate_to: "{{ groups['aether_nodes'][0] }}"
+  when: inventory_hostname in groups['storage_nodes']

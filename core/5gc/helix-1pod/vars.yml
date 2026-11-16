@@ -1,0 +1,15 @@
+core:
+  standalone: "true"
+  data_iface: "{{ helix_data_iface }}"
+  values_file: "core/values/helix.yaml"
+  helm:
+    chart_ref: core/charts/sd-core-0.12.6.tgz
+    chart_version: 0.12.6
+  pods:
+    amf: 1
+    smf: 1
+    udm: 1
+    udr: 1
+    pcf: 1
+    ausf: 1
+    nssf: 1
